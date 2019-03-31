@@ -6,6 +6,7 @@ import (
 	"log"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -87,14 +88,14 @@ func (peers *PeerList) createPeerMap(listOfPairs PairList) map[string]int32 {
 	if leftIndex == 0 && rightIndex == 0 {
 		return peers.peerMap
 	}
-	fmt.Println("left Index", leftIndex)
-	fmt.Println("right Index", rightIndex)
+	//log.Println("left Index", leftIndex)
+	//log.Println("right Index", rightIndex)
 	for counter > 0 { //get the left half of rebalanced map
 		index := leftIndex
 		//fmt.Println("index: ", index)
 		if leftIndex < 0 {
 			index = len(listOfPairs) + leftIndex
-			fmt.Println("index in left part: ", index)
+			//log.Println("index in left part: ", index)
 			if index > 0 { //ensure only valid indices are accessed
 				retVal[listOfPairs[index].Key] = listOfPairs[index].Value
 			}
@@ -109,7 +110,7 @@ func (peers *PeerList) createPeerMap(listOfPairs PairList) map[string]int32 {
 		index := rightIndex
 		if rightIndex > len(listOfPairs)-1 {
 			index = rightIndex - len(listOfPairs)
-			fmt.Println("index in right part: ", index)
+			//log.Println("index in right part: ", index)
 			if index < len(listOfPairs)-1 {
 				retVal[listOfPairs[index].Key] = listOfPairs[index].Value
 			}
@@ -125,7 +126,7 @@ func (peers *PeerList) createPeerMap(listOfPairs PairList) map[string]int32 {
 func (peers *PeerList) Show() string {
 	var result = "This is PeerMap:" + "\n"
 	for k, v := range peers.peerMap {
-		result += "addr: " + k + "id: " + string(v)
+		result += "addr: " + k + " " + "id: " + strconv.Itoa(int(v)) + " "
 	}
 	return result
 }
@@ -155,12 +156,8 @@ func (peers *PeerList) InjectPeerMapJson(peerMapJsonStr string, selfAddr string)
 	if err != nil {
 		log.Fatal("Error in InjectPeerMapJson: ", err)
 	}
-	//for i:=0; i<len(peerMapList); i++{
-	//
-	//}
 	if peerMap.Addr != selfAddr {
 		log.Println("adding to peerlist. Addr: ", peerMap.Addr, "port: ", peerMap.Id)
-		//peers.peerMap[peerMapList[i].Addr] = peerMapList[i].Id
 		if strings.Contains(peerMap.Addr, "http://") {
 			peers.Add(peerMap.Addr, peerMap.Id)
 		} else {

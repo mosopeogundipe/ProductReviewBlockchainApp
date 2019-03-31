@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net"
 	"net/http"
 	"strconv"
@@ -43,10 +44,9 @@ func Start(w http.ResponseWriter, r *http.Request) {
 		hostname = r.Host
 		port_ = port
 		portInt, _ := strconv.Atoi(port)
-		Peers = data.NewPeerList(int32(portInt), 32) //--> Uncomment this line! Get ID from command line here
+		Peers = data.NewPeerList(int32(portInt), 32)
 		fmt.Println("Port is: ", port)
 		fmt.Println("Port: ", r.URL.Port())
-		//fmt.Println("Url: ", host)
 		if port == "6688" { //if it's primary node
 			fmt.Println("Is Primary Node")
 			go StartHeartBeat()
@@ -113,7 +113,6 @@ func Upload(w http.ResponseWriter, r *http.Request) {
 	host := q["host"][0]
 	portStr := q["id"][0]
 	log.Println("In Upload host: ", host, "Port: ", portStr)
-	//_, portStr, _ := net.SplitHostPort(r.Host)
 	port, err := strconv.Atoi(portStr)
 	if err != nil {
 		log.Fatal(err, "Upload")
@@ -122,7 +121,6 @@ func Upload(w http.ResponseWriter, r *http.Request) {
 	if host != SELF_ADDR { //do not add node's self address to peerMap
 		Peers.Add("http://"+host, int32(port))
 	}
-	//Peers.Add("http://" + host, int32(port))
 	blockChainJson, err := SBC.BlockChainToJson()
 	if err != nil {
 		log.Fatal(err, " Wowowow")
@@ -130,7 +128,6 @@ func Upload(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "")
 		log.Println("Block Not Found ! Leaving Upload")
 	} else {
-		//Peers.Add("http://" + host, int32(port))
 		w.WriteHeader(200)
 		fmt.Fprint(w, blockChainJson)
 	}
@@ -172,12 +169,10 @@ func HeartBeatReceive(w http.ResponseWriter, r *http.Request) {
 	if addr != SELF_ADDR { //do not add node's self address to peerMap
 		Peers.Add("http://"+addr, heartBeatData.Id)
 	}
-	//Peers.Add("http://" + addr, heartBeatData.Id)
 	Peers.InjectPeerMapJson(heartBeatData.PeerMapJson, heartBeatData.Addr)
 	if heartBeatData.IfNewBlock {
 		var block p2.Block
 		block = block.DecodeFromJson(heartBeatData.BlockJson)
-		//json.Unmarshal([]byte(heartBeatData.BlockJson), block)
 		log.Println("In HeartBeatReceive. BlockJson: ", heartBeatData.BlockJson)
 		if !SBC.CheckParentHash(block) {
 			//Parent Block doesn't exist, so fetch it
@@ -199,13 +194,14 @@ func HeartBeatReceive(w http.ResponseWriter, r *http.Request) {
 
 // Ask another server to return a block of certain height and hash
 func AskForBlock(height int32, hash string) {
-	log.Println("Entered AskForBlock. Hash: ", hash)
+	log.Println("Entered AskForBlock. Height:", height, " Hash: ", hash)
 	isBlockFound := false
 	var block p2.Block
 	for !isBlockFound {
 		for k, _ := range Peers.Copy() {
 			//call send heart beat here
-			peerUrl := k + UPLOAD_BLOCK_SUFFIX + "/" + string(height) + "/" + hash
+			heightStr := strconv.Itoa(int(height))
+			peerUrl := k + UPLOAD_BLOCK_SUFFIX + "/" + heightStr + "/" + hash
 			resp, err := http.Get(peerUrl)
 			if err != nil {
 				log.Fatal("Error in AskForBlock: UploadBlock", err)
@@ -247,12 +243,8 @@ func ForwardHeartBeat(heartBeatData data.HeartBeatData) {
 func httpPost(url string, jsonBody string) {
 	log.Println("Entered POST")
 	var jsonStr = []byte(jsonBody)
-	//client := http.Client{}
 	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonStr))
 	req.Header.Set("Content-Type", "application/json")
-	//req.Header.Set("charset", "UTF-8")
-	//resp, _ := client.Do(req)
-	//defer resp.Body.Close()
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -262,20 +254,20 @@ func httpPost(url string, jsonBody string) {
 	if resp.StatusCode != 200 {
 		fmt.Println("Error in POST. Status is:", resp.Status)
 	}
-	fmt.Println("response Status:", resp.Status)
-	fmt.Println("response Headers:", resp.Header)
-	//body, _ := ioutil.ReadAll(resp.Body)
-	//fmt.Println("response Body:", string(body))
+	log.Println("response Status:", resp.Status)
+	log.Println("response Headers:", resp.Header)
 	log.Println("Finished POST")
 }
 
 func StartHeartBeat() {
-	for { //infinite for loo
+	for { //infinite loop - stops when program is closed
 		fmt.Println("In StartHeartBeat")
-		time.Sleep(5 * time.Second)
+		interval := rand.Intn(5) + 5
+		intervalSecs, _ := time.ParseDuration(strconv.Itoa(interval) + "s")
+		time.Sleep(intervalSecs)
+		//time.Sleep(intervalSecs * time.Second)
 		peerMapJson, _ := Peers.PeerMapToJson()
 		heartBeatData := data.PrepareHeartBeatData(&SBC, Peers.GetSelfId(), peerMapJson, SELF_ADDR)
-		//heartBeatData.Hops -= 1
 		ForwardHeartBeat(heartBeatData)
 	}
 }

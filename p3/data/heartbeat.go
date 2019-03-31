@@ -50,12 +50,6 @@ func PrepareHeartBeatData(sbc *SyncBlockChain, selfId int32, peerMapJSON string,
 		} else {
 			parent, _ = sbc.Get(sbc.bc.Length)
 			block = p2.Initial(parent[0].Header.Hash, parent[0].Header.Height, mpt)
-			//if sbc.bc.Length == 0{
-			//	parent, _ = sbc.Get(0)
-			//	block = p2.Initial(parent[0].Header.Hash, parent[0].Header.Height, mpt)
-			//}else{
-			//
-			//}
 		}
 		sbc.Insert(block)
 		return NewHeartBeatData(true, selfId, block.EncodeToJSON(), peerMapJSON, addr)

@@ -77,7 +77,7 @@ func CreateGenesisBlock(value p1.MerklePatriciaTrie) Block {
 	height := int32(0)
 	time_stamp := time.Now().UnixNano() / 1000000
 	size := int32(len([]byte(value.String())))
-	header := Header{Height: height, Timestamp: time_stamp, Hash: "", ParentHash: "0", Size: size}
+	header := Header{Height: height, Timestamp: time_stamp, Hash: "", ParentHash: "genesis", Size: size}
 	block := Block{Header: header, Value: value}
 	block.Header.Hash = block.hash_block(value)
 	return block
@@ -170,22 +170,31 @@ func (bc *BlockChain) Get(height int32) []Block {
 Inserts a Block into the Blockchain
 */
 func (bc *BlockChain) Insert(block Block) {
-	var blockList []Block
 	if !bc.isBlockInBlockChain(block) {
-		if bc.Length == 0 && len(bc.Chain) == 0 {
-			bc.Chain = make(map[int32][]Block)
-			blockList = append(blockList, block)
-			bc.Chain[bc.Length] = blockList
+		currentBlockList := bc.Get(block.Header.Height)
+		if len(currentBlockList) == 0 {
+			fmt.Println("blockahain is empty at height: ", block.Header.Height)
+			newChain := []Block{}
+			newChain = append(newChain, block)
+			if len(bc.Chain) == 0 {
+				bc.Chain = make(map[int32][]Block)
+			}
+			bc.Chain[block.Header.Height] = newChain
+			bc.Length = block.Header.Height
 		} else {
-			blockList = append(blockList, block)
-			bc.Chain[bc.Length+1] = blockList
+			fmt.Println("blockchain is not empty at height: ", block.Header.Height)
+			for _, currBlock := range currentBlockList {
+				if block.Header.Hash == currBlock.Header.Hash {
+					return
+				}
+			}
+			bc.Chain[block.Header.Height] = append(bc.Chain[block.Header.Height], block)
 		}
 		maxHeight := bc.FindMaxHeight()
 		bc.Length = maxHeight
 	} else {
 		fmt.Println("block with hash ", block.Header.Hash, "already exists in blockchain")
 	}
-
 }
 
 /**
