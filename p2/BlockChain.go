@@ -17,6 +17,7 @@ type Header struct {
 	Hash       string
 	ParentHash string
 	Size       int32
+	Nonce      string
 }
 
 type Block struct {
@@ -35,6 +36,7 @@ type BlockJson struct {
 	Hash       string            `json:"hash"`
 	ParentHash string            `json:"parentHash"`
 	Size       int32             `json:"size"`
+	Nonce      string            `json:"nonce"`
 	MPT        map[string]string `json:"mpt"`
 }
 
@@ -89,7 +91,7 @@ Serializes a block to JSON String
 func (b *Block) EncodeToJSON() string {
 	//	fmt.Println("BLOCK KEY VAL: ", b.Value.GetMptKeyValues())
 	blockJsonObject := BlockJson{Height: b.Header.Height, Timestamp: b.Header.Timestamp,
-		Hash: b.Header.Hash, ParentHash: b.Header.ParentHash, Size: b.Header.Size, MPT: b.Value.KeyVal}
+		Hash: b.Header.Hash, ParentHash: b.Header.ParentHash, Size: b.Header.Size, Nonce: b.Header.Nonce, MPT: b.Value.KeyVal}
 	blockJsonStr, _ := json.Marshal(blockJsonObject)
 	return string(blockJsonStr)
 }
@@ -108,7 +110,7 @@ Converts from a BlockJson structure to a Block Structure
 */
 func convertBlockJsonToBlock(blockJsonObject BlockJson) Block {
 	blockHeader := Header{Height: blockJsonObject.Height, Timestamp: blockJsonObject.Timestamp, Hash: blockJsonObject.Hash,
-		ParentHash: blockJsonObject.ParentHash, Size: blockJsonObject.Size}
+		ParentHash: blockJsonObject.ParentHash, Size: blockJsonObject.Size, Nonce: blockJsonObject.Nonce}
 	mpt := p1.MerklePatriciaTrie{}
 	mpt.Initial()
 	//fmt.Println("MPT: ", blockJsonObject.MPT)
@@ -234,6 +236,23 @@ func (bc *BlockChain) IsParentBlockInBlockChain(parentHash string) bool {
 		}
 	}
 	return false
+}
+
+func (bc *BlockChain) GetLatestBlocks() []Block {
+	return bc.Get(bc.Length)
+}
+
+func (bc *BlockChain) GetParentBlock(block Block) Block {
+	for key := range bc.Chain {
+		value := bc.Chain[key]
+		for index := range value {
+			blockInChain := value[index]
+			if blockInChain.Header.Hash == block.Header.ParentHash {
+				return blockInChain
+			}
+		}
+	}
+	return Block{}
 }
 
 func (bc *BlockChain) Show() string {

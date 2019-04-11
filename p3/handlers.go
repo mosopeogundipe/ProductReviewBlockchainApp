@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"cs686-blockchain-p3-mosopeogundipe/p2"
 	"cs686-blockchain-p3-mosopeogundipe/p3/data"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"golang.org/x/crypto/sha3"
 	"io/ioutil"
 	"log"
 	"math/rand"
@@ -23,11 +25,17 @@ var SELF_ADDR = "http://localhost:6688"
 var HEART_BEAT_API_SUFFIX = "/heartbeat/receive"
 var UPLOAD_BLOCK_SUFFIX = "/block"
 
+//var LETTER_RUNES = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+//var HEX_CHARSET =[]rune("abcdefABCDEF123456789")
+//var IS_PARENT_USED_ALREADY = false
+//var NONCE_PREFIX = "00000"
+
 var SBC data.SyncBlockChain
 var Peers data.PeerList
 var ifStarted bool //using this to indicate if it's started sending heartbeat
 var hostname string
 var port_ string
+var proposedParentHash string
 
 func init() {
 	// This function will be executed before everything else.
@@ -54,6 +62,7 @@ func Start(w http.ResponseWriter, r *http.Request) {
 			Download()
 			go StartHeartBeat()
 		}
+		go StartTryingNonces()
 		ifStarted = true
 	}
 
@@ -68,12 +77,12 @@ func Show(w http.ResponseWriter, r *http.Request) {
 func Register() {
 	resp, err := http.Get(REGISTER_SERVER)
 	if err != nil {
-		log.Fatalln(err)
+		log.Println(err)
 	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.Fatalln(err)
+		log.Println(err)
 	}
 	var strId = string(body)
 	id, err := strconv.Atoi(strId)
@@ -89,14 +98,14 @@ func Download() {
 	if !ifStarted {
 		resp, err := http.Get(BC_DOWNLOAD_SERVER + "?host=" + hostname + "&id=" + port_)
 		if err != nil {
-			log.Fatal("Error in Download: ", err)
+			log.Println("Error in Download: ", err)
 			return
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode == 200 {
 			blockChainJson, err := ioutil.ReadAll(resp.Body)
 			if err != nil {
-				log.Fatalln(err)
+				log.Println(err)
 				return
 			}
 			SBC.UpdateEntireBlockChain(string(blockChainJson))
@@ -115,7 +124,7 @@ func Upload(w http.ResponseWriter, r *http.Request) {
 	log.Println("In Upload host: ", host, "Port: ", portStr)
 	port, err := strconv.Atoi(portStr)
 	if err != nil {
-		log.Fatal(err, "Upload")
+		log.Println(err, "Upload")
 	}
 
 	if host != SELF_ADDR { //do not add node's self address to peerMap
@@ -123,7 +132,7 @@ func Upload(w http.ResponseWriter, r *http.Request) {
 	}
 	blockChainJson, err := SBC.BlockChainToJson()
 	if err != nil {
-		log.Fatal(err, " Wowowow")
+		log.Println(err, " Wowowow")
 		w.WriteHeader(404)
 		fmt.Fprint(w, "")
 		log.Println("Block Not Found ! Leaving Upload")
@@ -137,16 +146,17 @@ func Upload(w http.ResponseWriter, r *http.Request) {
 // Upload a block to whoever called this method, return jsonStr
 func UploadBlock(w http.ResponseWriter, r *http.Request) {
 	log.Println("Entered UploadBlock")
+	log.Println("In UploadBlock. Url Path: ", r.URL.Path)
 	splitPath := strings.Split(r.URL.Path, "/") //First element of array is an empty string
-	heightStr := splitPath[1]
-	hash := splitPath[2]
+	heightStr := splitPath[2]
+	hash := splitPath[3]
 	height, err := strconv.Atoi(heightStr)
 	if err != nil {
-		log.Fatal("Error in UploadBlock: strconv", err)
+		log.Println("Error in UploadBlock: strconv", err)
 	}
 	block, boolean := SBC.GetBlock(int32(height), hash)
 	if !boolean {
-		log.Fatal("In UploadBlock: block not found!")
+		log.Println("In UploadBlock: block not found!")
 		w.WriteHeader(404)
 		return
 	}
@@ -160,7 +170,7 @@ func HeartBeatReceive(w http.ResponseWriter, r *http.Request) {
 	log.Println("In HeartBeatReceive")
 	request, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		log.Fatal(err, "Error in reading post request: HeartBeatReceive ")
+		log.Println(err, "Error in reading post request: HeartBeatReceive ")
 	}
 	var heartBeatData data.HeartBeatData
 	json.Unmarshal([]byte(request), &heartBeatData)
@@ -173,16 +183,26 @@ func HeartBeatReceive(w http.ResponseWriter, r *http.Request) {
 	if heartBeatData.IfNewBlock {
 		var block p2.Block
 		block = block.DecodeFromJson(heartBeatData.BlockJson)
-		log.Println("In HeartBeatReceive. BlockJson: ", heartBeatData.BlockJson)
-		if !SBC.CheckParentHash(block) {
-			//Parent Block doesn't exist, so fetch it
-			parentHeight := block.Header.Height - 1
-			AskForBlock(parentHeight, block.Header.ParentHash)
-		}
-		SBC.Insert(block)
-		heartBeatData.Hops = heartBeatData.Hops - 1
-		if heartBeatData.Hops >= 0 {
-			ForwardHeartBeat(heartBeatData)
+		value := sha3.Sum256([]byte(block.Header.ParentHash + block.Header.Nonce + block.Value.GetRoot()))
+		valueStr := hex.EncodeToString(value[:])            // Do we need to convert to string to verify 0s OR should we just check 'value' byte array for successive 0s?
+		if strings.HasPrefix(valueStr, data.NONCE_PREFIX) { //only accept block that passes verification
+			log.Println("accepting block with hash: ", block.Header.Hash)
+			if block.Header.ParentHash == proposedParentHash {
+				data.IS_PARENT_USED_ALREADY = true
+			}
+			log.Println("In HeartBeatReceive. BlockJson: ", heartBeatData.BlockJson)
+			if !SBC.CheckParentHash(block) {
+				//Parent Block doesn't exist, so fetch it
+				parentHeight := block.Header.Height - 1
+				AskForBlock(parentHeight, block.Header.ParentHash)
+			}
+			SBC.Insert(block)
+			heartBeatData.Hops = heartBeatData.Hops - 1
+			if heartBeatData.Hops >= 0 {
+				ForwardHeartBeat(heartBeatData)
+			}
+		} else {
+			log.Println("Block doesn't pass verification. Skipping insert. Hash: ", block.Header.Hash)
 		}
 	} else {
 		//Do nothing!
@@ -194,36 +214,46 @@ func HeartBeatReceive(w http.ResponseWriter, r *http.Request) {
 
 // Ask another server to return a block of certain height and hash
 func AskForBlock(height int32, hash string) {
-	log.Println("Entered AskForBlock. Height:", height, " Hash: ", hash)
-	isBlockFound := false
-	var block p2.Block
-	for !isBlockFound {
-		for k, _ := range Peers.Copy() {
-			//call send heart beat here
-			heightStr := strconv.Itoa(int(height))
-			peerUrl := k + UPLOAD_BLOCK_SUFFIX + "/" + heightStr + "/" + hash
-			resp, err := http.Get(peerUrl)
-			if err != nil {
-				log.Fatal("Error in AskForBlock: UploadBlock", err)
-				return
-			}
-			defer resp.Body.Close()
-			blockJson, err := ioutil.ReadAll(resp.Body)
-			if err != nil {
-				log.Println("Block Not Found! Leaving AskForBlock")
-				log.Fatalln(err)
-				return
-			}
-			if resp.StatusCode == 200 {
-				isBlockFound = true
-				//json.Unmarshal([]byte(blockJson), block)
-				block = block.DecodeFromJson(string(blockJson))
-				SBC.Insert(block)
-				break
-			}
-		}
-		//log.Println("Leaving AskForBlock")
+	if height == 0 { //stop looking for parent height once you reach genesis block (block at height 0)
+		log.Println("reached end of recursion in AskForBlock")
+		return
 	}
+	log.Println("Entered AskForBlock. Height:", height, " Hash: ", hash)
+	//isBlockFound := false
+	var block p2.Block
+	//for !isBlockFound {
+	for k, _ := range Peers.Copy() {
+		//call send heart beat here
+		heightStr := strconv.Itoa(int(height))
+		peerUrl := k + UPLOAD_BLOCK_SUFFIX + "/" + heightStr + "/" + hash
+		resp, err := http.Get(peerUrl)
+		if err != nil {
+			log.Println("Error in AskForBlock: UploadBlock", err)
+			//return
+		}
+		defer resp.Body.Close()
+		blockJson, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			log.Println("Block Not Found! Leaving AskForBlock")
+			log.Println(err)
+			//return
+		}
+		if resp.StatusCode == 200 {
+			block = block.DecodeFromJson(string(blockJson))
+			if block.Header.ParentHash == proposedParentHash {
+				data.IS_PARENT_USED_ALREADY = true
+			}
+			if !SBC.CheckParentHash(block) {
+				//Parent Block doesn't exist, so fetch it
+				parentHeight := block.Header.Height - 1
+				AskForBlock(parentHeight, block.Header.ParentHash)
+			}
+			SBC.Insert(block)
+			break
+		}
+	}
+	//log.Println("Leaving AskForBlock")
+	//}
 }
 
 func ForwardHeartBeat(heartBeatData data.HeartBeatData) {
@@ -267,7 +297,66 @@ func StartHeartBeat() {
 		time.Sleep(intervalSecs)
 		//time.Sleep(intervalSecs * time.Second)
 		peerMapJson, _ := Peers.PeerMapToJson()
-		heartBeatData := data.PrepareHeartBeatData(&SBC, Peers.GetSelfId(), peerMapJson, SELF_ADDR)
+		//data.SetValues(false, p2.Block{})
+		heartBeatData := data.PrepareHeartBeatData(&SBC, Peers.GetSelfId(), peerMapJson, SELF_ADDR, p2.Block{}, false)
 		ForwardHeartBeat(heartBeatData)
 	}
+}
+
+func StartTryingNonces() {
+	for {
+		log.Println("Entered Start Trying Nonces...")
+		_, isGenesisBlockCreated := SBC.Get(0)
+		var block p2.Block
+		mpt := data.CreateRandomMpt()
+		if !isGenesisBlockCreated {
+			block = SBC.GenBlock(mpt)
+			//data.SetValues(true, block)
+			peerMapJson, _ := Peers.PeerMapToJson()
+			heartbeat := data.PrepareHeartBeatData(&SBC, Peers.GetSelfId(), peerMapJson, SELF_ADDR, block, true)
+			ForwardHeartBeat(heartbeat)
+			continue
+		}
+		parentBlock := SBC.GetLatestBlocks()[0]
+		proposedParentHash = parentBlock.Header.Hash
+		nonce := data.GetNonce(parentBlock, mpt.GetRoot())
+		if data.IS_PARENT_USED_ALREADY { //checking if proposed parent is already used as a parent, just before I insert...
+			log.Println("Hash: ", parentBlock.Header.Hash, " is already used to create a block by another node")
+			data.IS_PARENT_USED_ALREADY = false //reset checker value to default
+			continue
+		}
+		block = p2.Initial(parentBlock.Header.Hash, parentBlock.Header.Height, mpt)
+		block.Header.Nonce = nonce
+		//data.SetValues(true, block)
+		peerMapJson, _ := Peers.PeerMapToJson()
+		heartbeat := data.PrepareHeartBeatData(&SBC, Peers.GetSelfId(), peerMapJson, SELF_ADDR, block, true)
+		ForwardHeartBeat(heartbeat)
+	}
+	//}
+}
+
+func Canonical(w http.ResponseWriter, r *http.Request) {
+	var value string = ""
+	for i := range SBC.GetLatestBlocks() {
+		value += "Chain " + strconv.Itoa(i+1) + "\n"
+		block := SBC.GetLatestBlocks()[i]
+		value += PrintBlock(block)
+		height := block.Header.Height
+		log.Println("In Canonical ", "Chain "+string(i+1), " start height: ", height)
+		for height > 1 {
+			parent, exists := SBC.GetBlock(height-1, block.Header.ParentHash)
+			if exists {
+				value += PrintBlock(parent)
+			} else {
+				log.Println("Parent Hash: ", parent.Header.Hash, " doesn't exist in blockchain")
+			}
+			block = parent
+			height--
+		}
+	}
+	fmt.Fprintf(w, value)
+}
+
+func PrintBlock(block p2.Block) string {
+	return "height = " + strconv.Itoa(int(block.Header.Height)) + ", " + "timestamp = " + strconv.Itoa(int(block.Header.Timestamp)) + ", " + "parentHash = " + block.Header.ParentHash + ", " + "size = " + strconv.Itoa(int(block.Header.Size)) + "\n"
 }

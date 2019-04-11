@@ -75,6 +75,20 @@ func (sbc *SyncBlockChain) GenBlock(mpt p1.MerklePatriciaTrie) p2.Block {
 	return genesisBlock
 }
 
+func (sbc *SyncBlockChain) GetLatestBlocks() []p2.Block {
+	sbc.mux.Lock()
+	defer sbc.mux.Unlock()
+	latestBlocks := sbc.bc.GetLatestBlocks()
+	return latestBlocks
+}
+
+func (sbc *SyncBlockChain) GetParentBlock(block p2.Block) p2.Block {
+	sbc.mux.Lock()
+	defer sbc.mux.Unlock()
+	parentBlock := sbc.bc.GetParentBlock(block)
+	return parentBlock
+}
+
 func (sbc *SyncBlockChain) Show() string {
 	return sbc.bc.Show()
 }
