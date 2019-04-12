@@ -1,1 +1,1 @@
-# cs686_BlockChain_P2: Gossip Protocol
+# cs686_BlockChain_P3: Gossip Protocol
