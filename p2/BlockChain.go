@@ -172,31 +172,31 @@ func (bc *BlockChain) Get(height int32) []Block {
 Inserts a Block into the Blockchain
 */
 func (bc *BlockChain) Insert(block Block) {
-	if !bc.isBlockInBlockChain(block) {
-		currentBlockList := bc.Get(block.Header.Height)
-		if len(currentBlockList) == 0 {
-			fmt.Println("blockahain is empty at height: ", block.Header.Height)
-			newChain := []Block{}
-			newChain = append(newChain, block)
-			if len(bc.Chain) == 0 {
-				bc.Chain = make(map[int32][]Block)
-			}
-			bc.Chain[block.Header.Height] = newChain
-			bc.Length = block.Header.Height
-		} else {
-			fmt.Println("blockchain is not empty at height: ", block.Header.Height)
-			for _, currBlock := range currentBlockList {
-				if block.Header.Hash == currBlock.Header.Hash {
-					return
-				}
-			}
-			bc.Chain[block.Header.Height] = append(bc.Chain[block.Header.Height], block)
+	//if !bc.isBlockInBlockChain(block) {
+	currentBlockList := bc.Get(block.Header.Height)
+	if len(currentBlockList) == 0 {
+		fmt.Println("blockahain is empty at height: ", block.Header.Height)
+		newChain := []Block{}
+		newChain = append(newChain, block)
+		if len(bc.Chain) == 0 {
+			bc.Chain = make(map[int32][]Block)
 		}
-		maxHeight := bc.FindMaxHeight()
-		bc.Length = maxHeight
+		bc.Chain[block.Header.Height] = newChain
+		bc.Length = block.Header.Height
 	} else {
-		fmt.Println("block with hash ", block.Header.Hash, "already exists in blockchain")
+		fmt.Println("blockchain is not empty at height: ", block.Header.Height)
+		for _, currBlock := range currentBlockList {
+			if block.Header.Hash == currBlock.Header.Hash {
+				return
+			}
+		}
+		bc.Chain[block.Header.Height] = append(bc.Chain[block.Header.Height], block)
 	}
+	maxHeight := bc.FindMaxHeight()
+	bc.Length = maxHeight
+	//} else {
+	//fmt.Println("block with hash ", block.Header.Hash, "already exists in blockchain")
+	//}
 }
 
 /**
@@ -225,14 +225,11 @@ func (bc *BlockChain) isBlockInBlockChain(block Block) bool {
 	return false
 }
 
-func (bc *BlockChain) IsParentBlockInBlockChain(parentHash string) bool {
-	for key := range bc.Chain {
-		value := bc.Chain[key]
-		for index := range value {
-			blockInChain := value[index]
-			if blockInChain.Header.Hash == parentHash {
-				return true
-			}
+func (bc *BlockChain) IsParentBlockInBlockChain(block Block) bool {
+	blockList := bc.Get(block.Header.Height - 1)
+	for _, currBlock := range blockList {
+		if block.Header.ParentHash == currBlock.Header.Hash {
+			return true
 		}
 	}
 	return false

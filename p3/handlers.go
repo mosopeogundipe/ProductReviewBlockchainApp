@@ -25,11 +25,6 @@ var SELF_ADDR = "http://localhost:6688"
 var HEART_BEAT_API_SUFFIX = "/heartbeat/receive"
 var UPLOAD_BLOCK_SUFFIX = "/block"
 
-//var LETTER_RUNES = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-//var HEX_CHARSET =[]rune("abcdefABCDEF123456789")
-//var IS_PARENT_USED_ALREADY = false
-//var NONCE_PREFIX = "00000"
-
 var SBC data.SyncBlockChain
 var Peers data.PeerList
 var ifStarted bool //using this to indicate if it's started sending heartbeat
@@ -63,6 +58,7 @@ func Start(w http.ResponseWriter, r *http.Request) {
 			go StartHeartBeat()
 		}
 		go StartTryingNonces()
+		go SBC.FinishInsert() //in this thread, insert blocks from queue into blockchain
 		ifStarted = true
 	}
 
@@ -252,8 +248,6 @@ func AskForBlock(height int32, hash string) {
 			break
 		}
 	}
-	//log.Println("Leaving AskForBlock")
-	//}
 }
 
 func ForwardHeartBeat(heartBeatData data.HeartBeatData) {
@@ -295,9 +289,7 @@ func StartHeartBeat() {
 		interval := rand.Intn(5) + 5
 		intervalSecs, _ := time.ParseDuration(strconv.Itoa(interval) + "s")
 		time.Sleep(intervalSecs)
-		//time.Sleep(intervalSecs * time.Second)
 		peerMapJson, _ := Peers.PeerMapToJson()
-		//data.SetValues(false, p2.Block{})
 		heartBeatData := data.PrepareHeartBeatData(&SBC, Peers.GetSelfId(), peerMapJson, SELF_ADDR, p2.Block{}, false)
 		ForwardHeartBeat(heartBeatData)
 	}
@@ -311,7 +303,6 @@ func StartTryingNonces() {
 		mpt := data.CreateRandomMpt()
 		if !isGenesisBlockCreated {
 			block = SBC.GenBlock(mpt)
-			//data.SetValues(true, block)
 			peerMapJson, _ := Peers.PeerMapToJson()
 			heartbeat := data.PrepareHeartBeatData(&SBC, Peers.GetSelfId(), peerMapJson, SELF_ADDR, block, true)
 			ForwardHeartBeat(heartbeat)
@@ -332,7 +323,6 @@ func StartTryingNonces() {
 		heartbeat := data.PrepareHeartBeatData(&SBC, Peers.GetSelfId(), peerMapJson, SELF_ADDR, block, true)
 		ForwardHeartBeat(heartbeat)
 	}
-	//}
 }
 
 func Canonical(w http.ResponseWriter, r *http.Request) {

@@ -4,8 +4,11 @@ import (
 	"cs686-blockchain-p3-mosopeogundipe/p1"
 	"cs686-blockchain-p3-mosopeogundipe/p2"
 	"errors"
+	"log"
 	"sync"
 )
+
+var queue []p2.Block
 
 type SyncBlockChain struct {
 	bc  p2.BlockChain
@@ -39,16 +42,41 @@ func (sbc *SyncBlockChain) GetBlock(height int32, hash string) (p2.Block, bool) 
 	return p2.Block{}, false
 }
 
-func (sbc *SyncBlockChain) Insert(block p2.Block) {
+//HINT: PREVIOUS INSERT FUNCTION COMMENTED OUT -- Enhanced performance with new logic below
+//func (sbc *SyncBlockChain) Insert(block p2.Block) {
+//	sbc.mux.Lock()
+//	sbc.bc.Insert(block)
+//	sbc.mux.Unlock()
+//}
+
+//In order to reduce network losses, I changed insert method to add to queue and have another thread to perform inserts later.
+//This helps ensures that forks in later chains get stored in all nodes
+func (sbc *SyncBlockChain) Insert(block p2.Block) { //simply adds the block to a queue here
 	sbc.mux.Lock()
-	sbc.bc.Insert(block)
+	//log.Println("INSERT : appending to queue")
+	queue = append(queue, block)
 	sbc.mux.Unlock()
+}
+
+func (sbc *SyncBlockChain) FinishInsert() { //inserts all available elements of queue into blockchain
+	log.Println("Entered FINISH INSERT")
+	for {
+		sbc.mux.Lock()
+		if len(queue) > 0 {
+			sbc.bc.Insert(queue[0])
+			// Dequeue
+			queue[0] = p2.Block{} // Erase element (write empty block)
+			queue = queue[1:]
+		}
+		sbc.mux.Unlock()
+	}
 }
 
 func (sbc *SyncBlockChain) CheckParentHash(insertBlock p2.Block) bool {
 	sbc.mux.Lock()
 	defer sbc.mux.Unlock()
-	return sbc.bc.IsParentBlockInBlockChain(insertBlock.Header.ParentHash)
+	//return sbc.bc.IsParentBlockInBlockChain(insertBlock.Header.ParentHash)
+	return sbc.bc.IsParentBlockInBlockChain(insertBlock)
 }
 
 func (sbc *SyncBlockChain) UpdateEntireBlockChain(blockChainJson string) {
