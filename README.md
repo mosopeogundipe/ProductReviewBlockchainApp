@@ -35,7 +35,7 @@ This entails calling a POST /register/product API in the middle layer, from a we
 "ProductName": "Smart Water",
 "ProductID": "A0372926671"
 }
-<pre>
+</pre>
 
 It stores this JSON input in a Product Object structure, and maps the ProductID to Product Object for easy retrieval. See the data structures below:
 
