@@ -48,4 +48,10 @@ var routes = Routes{
 		"/canonical",
 		Canonical,
 	},
+	Route{
+		"TransactionReceive",
+		"POST",
+		"/transaction/receive",
+		TransactionReceive,
+	},
 }

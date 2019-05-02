@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"cs686-blockchain-p3-mosopeogundipe/p2"
 	"cs686-blockchain-p3-mosopeogundipe/p3/data"
+	data2 "cs686-blockchain-p3-mosopeogundipe/p5/data"
+	"cs686-blockchain-p3-mosopeogundipe/p5/logic"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -21,6 +23,7 @@ import (
 var TA_SERVER = "http://localhost:6688"
 var REGISTER_SERVER = TA_SERVER + "/peer"
 var BC_DOWNLOAD_SERVER = TA_SERVER + "/upload"
+var MIDDLE_LAYER_SERVER = "http://localhost:7700" //IP and port of middle layer server
 var SELF_ADDR = "http://localhost:6688"
 var HEART_BEAT_API_SUFFIX = "/heartbeat/receive"
 var UPLOAD_BLOCK_SUFFIX = "/block"
@@ -31,6 +34,7 @@ var ifStarted bool //using this to indicate if it's started sending heartbeat
 var hostname string
 var port_ string
 var proposedParentHash string
+var transactionQueue []data2.Transaction
 
 func init() {
 	// This function will be executed before everything else.
@@ -50,6 +54,7 @@ func Start(w http.ResponseWriter, r *http.Request) {
 		Peers = data.NewPeerList(int32(portInt), 32)
 		fmt.Println("Port is: ", port)
 		fmt.Println("Port: ", r.URL.Port())
+		RegisterInMiddleLayer()
 		if port == "6688" { //if it's primary node
 			fmt.Println("Is Primary Node")
 			go StartHeartBeat()
@@ -107,6 +112,28 @@ func Download() {
 			SBC.UpdateEntireBlockChain(string(blockChainJson))
 		} else {
 			log.Println("No blockchain returned from primary node!")
+		}
+	}
+}
+
+func RegisterInMiddleLayer() {
+	resp, err := http.Get(MIDDLE_LAYER_SERVER + "/miner/register" + "?host=" + hostname + "&id=" + port_)
+	if err != nil {
+		log.Println("Error in RegisterMiner: ", err)
+		//return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 200 {
+		log.Println(hostname + " Registered Successfully")
+	} else {
+		for resp.StatusCode != 200 { //keep retrying until miner succesfully registers
+			log.Println("Registration Unsuccessful! Retrying...: ", err)
+			resp, err = http.Get(MIDDLE_LAYER_SERVER + "/registerminer" + "?host=" + hostname + "&id=" + port_)
+			if err != nil {
+				log.Println("Error in RegisterMiner: ", err)
+				//return
+			}
 		}
 	}
 }
@@ -349,4 +376,39 @@ func Canonical(w http.ResponseWriter, r *http.Request) {
 
 func PrintBlock(block p2.Block) string {
 	return "height = " + strconv.Itoa(int(block.Header.Height)) + ", " + "timestamp = " + strconv.Itoa(int(block.Header.Timestamp)) + ", " + "parentHash = " + block.Header.ParentHash + ", " + "size = " + strconv.Itoa(int(block.Header.Size)) + "\n"
+}
+
+// Receive transactions from middle layer, validate and store them in transaction pool if they are valid
+func TransactionReceive(w http.ResponseWriter, r *http.Request) {
+	var transaction data2.Transaction
+	log.Println("In TransactionReceive")
+	request, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.Println(err, "Error in reading post request: TransactionReceive ")
+		w.WriteHeader(500)
+		return
+	}
+	err = json.Unmarshal([]byte(request), &transaction)
+	if err != nil {
+		log.Println(err, "Error in json unmarshal: TransactionReceive ")
+		w.WriteHeader(500)
+		return
+	}
+	q := r.URL.Query()
+	signatureStr := q["Signature"][0]
+	originallySignedMsg := data2.Transaction{TransactionID: "", PublicKey: "", ReviewObj: transaction.ReviewObj} //create object with exact same contents as when message was signed
+	originallySignedMsgJson, _ := json.Marshal(originallySignedMsg)
+	isSignatureVerified := logic.VerifyPrivateKeySignature([]byte(string(originallySignedMsgJson)), []byte(signatureStr), []byte(transaction.PublicKey))
+	if isSignatureVerified { //add to pool if signature is verified
+		transactionQueue = append(transactionQueue, transaction)
+		w.WriteHeader(200)
+	} else {
+		log.Println("Transaction Invalid. Public-Private key mismatch")
+		w.WriteHeader(400)
+		w.Write([]byte("Transaction Invalid. Public-Private key mismatch"))
+	}
+}
+
+func removeTransactionFromPool() data2.Transaction {
+
 }
