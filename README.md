@@ -29,10 +29,14 @@ This entails the user calling a GET /register/user API in the middle layer, from
 
 #### 2. Product Creation --- (COMPLETED)
 This entails calling a POST /register/product API in the middle layer, from a web client. Although anyone can perform this action right now, this should ideally be done by a seller. This API accepts JSON input of the form:
+
+<pre>
 {
 "ProductName": "Smart Water",
 "ProductID": "A0372926671"
 }
+<pre>
+
 It stores this JSON input in a Product Object structure, and maps the ProductID to Product Object for easy retrieval. See the data structures below:
 
 type Product struct {
