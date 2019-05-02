@@ -39,15 +39,19 @@ This entails calling a POST /register/product API in the middle layer, from a we
 
 It stores this JSON input in a Product Object structure, and maps the ProductID to Product Object for easy retrieval. See the data structures below:
 
+<pre>
 type Product struct {
 	ProductName string
 	ProductID   string 
 }
 
+
 //maps product id to product struct. Datastore for products
 type Products struct {
 	ProductSet map[string]Product 
 }
+</pre>
+
 The API returns a message that says if registration was successful or not.
 
 #### 3. Miner Registration --- (COMPLETED)
@@ -56,14 +60,17 @@ This entails calling a POST /register/miners API in the middle layer, from a web
 #### 4. Sign Message --- (COMPLETED)
 This entails calling a POST /sign/message API in the middle layer, from a web client. It's used for signing the message that would be sent by users to the miners, and is the first step of message validation. The API accepts a JSON body like:
 
+<pre>
 {
 "PrivateKey": "xhsxhsgxshkxgshdsygsjkxxvvssjkxjhsxjxvbxvcv",
 "ProductID": "A0372926671",
 "Review": "this was a horrible product"
 }
+</pre>
 
 It verifies that the ProductID exists in the product database (number 2 above), and if so it uses these details to create a transaction object with blank public key and blank transaction id, signs the transaction object and returns the signature string to the web client. 
 
+<pre>
 //Transaction Object:
 type Transaction struct {
 	TransactionID string //This is essentially a hash of the transaction object
@@ -82,16 +89,19 @@ type Product struct {
 	ProductName string
 	ProductID   string //GTIN of product, must be provided by merchant by checking the product
 }
+</pre>
 
 #### 5. Post Review --- (COMPLETED)
 This entails calling a POST /review/post API in the middle layer, from a web client. It's used for accepting a review from a user. The API accepts JSON input that looks like:
 
+<pre>
 {
 "PublicKey": "xhsxhsgxshkxgshdsygsjkxxvvssjkxjhsxjxvbxvcv",
 "ProductID": "A0372926671",
 "Review": "this was a horrible product"
 "Signature": "edhgjehj372wuowhs02wio290w2wshjhs761278769821sfjsfsjhg387268972"
 }
+</pre>
 
 "Signature" above is the signature for this same message, which must have been created prior by performing the steps in no 4 above.
 The API verifies that the user and product exists by using checking the user database (step 1 above) for the hash of the public key, and checking the product database (step 2 above) for the Product ID. If both exist, it creates a transaction object (refer to step 4 above) and calls a POST /transaction/receive API for every miner in list of miners from the middle layer. To this API, it sends the JSON string of the transaction object in the API request body and the Signature as query strings in the url.
