@@ -138,7 +138,7 @@ func VerifyPrivateKeySignature(message []byte, signature []byte, publicKey []byt
 	}
 	rsaPublicKey := pubInterface.(*rsa.PublicKey)
 	var errs error = rsa.VerifyPKCS1v15(rsaPublicKey, newhash, hashed[:], signature)
-	if err != nil {
+	if errs != nil {
 		fmt.Fprintf(os.Stderr, "Error from signature verification: %s\n", errs)
 		return false
 	}
