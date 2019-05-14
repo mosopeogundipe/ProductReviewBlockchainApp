@@ -6,10 +6,12 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"cs686-blockchain-p3-mosopeogundipe/p5/data"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/pem"
 	"fmt"
 	"golang.org/x/crypto/sha3"
+	"log"
 	"os"
 )
 
@@ -39,7 +41,7 @@ import (
 //}
 
 //Stores hash of user's public key in set
-func CreateUser(users data.Users) (string, string) {
+func CreateUser(users *data.Users) (string, string) {
 	publicKey, privateKey := createPublicPrivateKeyPair()
 	publicKeyStr := ExportRsaPublicKeyAsPemStr(publicKey)
 	privateKeyStr := ExportRsaPrivateKeyAsPemStr(privateKey)
@@ -47,6 +49,7 @@ func CreateUser(users data.Users) (string, string) {
 	if len(users.UserSet) == 0 {
 		users.UserSet = make(map[string]bool)
 		users.UserSet[hex.EncodeToString(sum[:])] = true
+		//log.Println("storing in user set. len: ", len(users.UserSet))
 	} else {
 		users.UserSet[hex.EncodeToString(sum[:])] = true
 	}
@@ -111,7 +114,9 @@ func SignWithPrivateKey(message []byte, privatekey []byte) []byte {
 		fmt.Fprintf(os.Stderr, "Error from signing: %s\n", err)
 		return signature
 	}
-	return signature
+	sig := base64.StdEncoding.EncodeToString(signature) //the raw "signature" byte array uses a weird encoding and gives foreign characters that can't be sent over Web API
+	log.Println("Signature: ", sig)
+	return []byte(sig)
 }
 
 //verifies that message is signed by correct user

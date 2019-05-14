@@ -25,12 +25,13 @@ var USERUPLOAD data.UserWebUpload
 var MINERS_TRANSACTION_API = "/transaction/receive"
 
 func init() {
+	USERS = data.Users{}
 }
 
 // API #1 in user flow
 // Creates user id and public private key, stores others and returns only private key to user
 func RegisterUser(w http.ResponseWriter, r *http.Request) {
-	publicKey, privateKey := logic.CreateUser(USERS)
+	publicKey, privateKey := logic.CreateUser(&USERS)
 	var value string = ""
 	value += publicKey + "\n"
 	value += privateKey
@@ -58,15 +59,17 @@ func RegisterProduct(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(500)
 		return
 	}
-	successful, alreadyexists := logic.AddProduct(PRODUCT, PRODUCTS)
+	successful, alreadyexists := logic.AddProduct(PRODUCT, &PRODUCTS)
 	if successful {
 		w.WriteHeader(200)
-		w.Write([]byte("Product registration successful"))
+		w.Write([]byte("Product registration successful for " + PRODUCT.ProductID))
 	} else if !successful && alreadyexists == "exists" {
 		w.WriteHeader(200)
 		w.Write([]byte("There's already a product for ID " + PRODUCT.ProductID))
 	}
-
+	for key, val := range PRODUCTS.ProductSet {
+		log.Println("Key: ", key, " Val: ", val)
+	}
 }
 
 // API #1 in miner flow
@@ -86,13 +89,14 @@ func RegisterMiner(w http.ResponseWriter, r *http.Request) {
 	if len(MINERS) == 0 {
 		MINERS = make(map[string]int32)
 	}
-	if MINERS[addr] > 0 {
+	if _, exists := MINERS[addr]; exists { //check if miner has already been registered
 		log.Println("Miner " + addr + "Already registered")
 		w.WriteHeader(200)
 	} else {
 		MINERS[addr] = int32(port)
 		w.WriteHeader(200)
 	}
+	fmt.Println("Number of Miners: ", len(MINERS))
 }
 
 // API #1 in user flow
@@ -102,6 +106,7 @@ func RegisterMiner(w http.ResponseWriter, r *http.Request) {
 "PublicKey": "xhsxhsgxshkxgshdsygsjkxxvvssjkxjhsxjxvbxvcv",
 "ProductID": "A0372926671",
 "Review": "this was a horrible product"
+"Signature": "edhgjehj372wuowhs02wio290w2wshjhs761278769821sfjsfsjhg387268972"
 }*/
 func PostReview(w http.ResponseWriter, r *http.Request) {
 	log.Println("In PostReview")
@@ -176,8 +181,10 @@ func SignMessage(w http.ResponseWriter, r *http.Request) {
 	review := data.Review{Product: product, Review: signMessage.Review}
 	transaction := data.Transaction{TransactionID: "", PublicKey: "", ReviewObj: review}
 	transactionJson, _ := json.Marshal(transaction)
+	log.Println("PRI KEY: ", signMessage.PrivateKey)
 	signature := logic.SignWithPrivateKey([]byte(transactionJson), []byte(signMessage.PrivateKey))
 	w.WriteHeader(200)
+	w.Write([]byte("Signature is: "))
 	w.Write(signature)
 }
 

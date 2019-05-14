@@ -6,6 +6,7 @@ import (
 	"cs686-blockchain-p3-mosopeogundipe/p3/data"
 	data2 "cs686-blockchain-p3-mosopeogundipe/p5/data"
 	"cs686-blockchain-p3-mosopeogundipe/p5/logic"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -398,7 +399,13 @@ func TransactionReceive(w http.ResponseWriter, r *http.Request) {
 	signatureStr := q["Signature"][0]
 	originallySignedMsg := data2.Transaction{TransactionID: "", PublicKey: "", ReviewObj: transaction.ReviewObj} //create object with exact same contents as when message was signed
 	originallySignedMsgJson, _ := json.Marshal(originallySignedMsg)
-	isSignatureVerified := logic.VerifyPrivateKeySignature([]byte(string(originallySignedMsgJson)), []byte(signatureStr), []byte(transaction.PublicKey))
+	signature, err := base64.StdEncoding.DecodeString(signatureStr) //convert signature string back to byte array
+	if err != nil {
+		log.Println(err, "Error in decoding signature to byte array: TransactionReceive ")
+		w.WriteHeader(500)
+		return
+	}
+	isSignatureVerified := logic.VerifyPrivateKeySignature([]byte(string(originallySignedMsgJson)), signature, []byte(transaction.PublicKey))
 	if isSignatureVerified { //add to pool if signature is verified
 		transactionQueue = append(transactionQueue, transaction)
 		w.WriteHeader(200)
@@ -409,6 +416,7 @@ func TransactionReceive(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+//if transaction queue isn't empty, take next transaction in front of the queue
 func removeTransactionFromPool() data2.Transaction {
-
+	return data2.Transaction{}
 }
