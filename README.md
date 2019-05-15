@@ -115,6 +115,10 @@ If the message verification is successful, it adds the transaction object to the
 ### Remaining Functionalities
 
 #### 7. Ensuring users can submit only one review per product
-#### 8. Miners creating blocks based on submitted reviews in transaction pool
+
+#### 8. Miners creating blocks based on submitted reviews in transaction pool -- (COMPLETED)
+Changed the StartTryingNonces() function in the p3/handlers class to generate a new block every 5 seconds (this time is configurable). Every 5 seconds, if there are transactions in the transaction pool, it takes each transaction, adds them to mpt where the user's public key is the key and transaction JSON is the value. It then proceeds to generate nonce and create block using already existing functionalities from previous projects.
+
 #### 9. Tracking of all reviews for a product based on the product id 
+
 #### 10. Tracking of all reviews for all products based on user id
