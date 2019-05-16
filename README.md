@@ -115,6 +115,34 @@ If the message verification is successful, it adds the transaction object to the
 ### Remaining Functionalities
 
 #### 7. Ensuring users can submit only one review per product
-#### 8. Miners creating blocks based on submitted reviews in transaction pool
-#### 9. Tracking of all reviews for a product based on the product id 
-#### 10. Tracking of all reviews for all products based on user id
+
+#### 8. Miners creating blocks based on submitted reviews in transaction pool -- (COMPLETED)
+Changed the StartTryingNonces() function in the p3/handlers class to generate a new block every 5 seconds (this time is configurable). Every 5 seconds, if there are transactions in the transaction pool, it takes each transaction, adds them to mpt where hash of the user's public key is the KEY and transaction JSON is the VALUE. It then proceeds to generate nonce and create block using already existing functionalities from previous projects.
+
+#### 9. Tracking of all reviews for all products based on user id -- (COMPLETED)
+This entails calling a POST /reviews/find/publickey API from a web client. This is hosted on the miners' end as each miner has a separate copy of the blockchain. The API accepts JSON input that looks like:
+
+<pre>
+{
+"PublicKey": "xhsxhsgxshkxgshdsygsjkxxvvssjkxjhsxjxvbxvcv",
+"ProductID": "",
+"Review": ""
+"Signature": ""
+}
+</pre>
+
+It uses the same input structure as previous APIs but expects that only the PublicKey is populated while other fields come with an empty string. It hashed the user's public key and checks through the MPT of every block in the blockchain to see if it this hashed public key exists as a key in the MPT. If locates the value of the key in every MPT and returns all the values to the user. Note that the value is a Transaction Object, so it returns all those details to the user who calls this API. If no record is found, it returns a message that says so.
+
+#### 10. Tracking of all reviews for a product based on the product id and user id -- (COMPLETED)
+This entails calling a POST /reviews/find/all API from a web client. This is hosted on the miners' end as each miner has a separate copy of the blockchain. The API accepts JSON input that looks like:
+
+<pre>
+{
+"PublicKey": "xhsxhsgxshkxgshdsygsjkxxvvssjkxjhsxjxvbxvcv",
+"ProductID": "A36282722898",
+"Review": ""
+"Signature": ""
+}
+</pre>
+
+It uses the same input structure as previous APIs but expects that both the PublicKey and ProductID are populated while other fields come with an empty string. It hashed the user's public key and checks through the MPT of every block in the blockchain to see if it this hashed public key exists as a key in the MPT. If locates the value of the key in every MPT and returns all the values to the user if they also have a matching product ID with the one sent from the API request. Note that the value is a Transaction Object, so it returns all those details to the user who calls this API. If no record is found, it returns a message that says so.
