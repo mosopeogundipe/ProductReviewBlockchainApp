@@ -2,11 +2,11 @@
 
 ### Why Blockchain
 
-People find it hard to trust reviews from most review websites, because many people put fake reviews. Using blockchain would allow us achieve trust through immutability and transparency that blockchain provides. Blockchain is also good because it allows reviewers to remain anonymous, while ensuring they are verified. This is useful for reviews of sensitive products. This solution will only work only for products that have a unique product id (number usually found on a barcode). This ID might be same for products in the same batch, and that’s still okay for this solution
+People find it hard to trust reviews from most review websites. Using blockchain would allow us achieve trust through immutability and transparency that blockchain provides. Blockchain is also good because it allows reviewers to remain anonymous, while ensuring they are verified. This is useful for reviews of sensitive products. This solution will only work only for products that have a unique product id (number usually found on a barcode). This ID might be same for products in the same batch, and that’s still okay for this solution
 
 ### How
 
-1. Trust - ensure only users who have bought a product can submit reviews for it. There will be a centralized database where merchants register their product and the quantity available. Users will need to submit their account id and product id/barcode of the product if it's to be valid. Also ensure they can only leave one review per product by checking against a centralized database of product reviews
+1. Trust - There will be a centralized database where merchants register their product and the quantity available. Users will need to submit their account id and product id/barcode of the product if it's to be valid. Also ensure they can only leave one review per product by checking against a centralized database of product reviews
 Note: Allowing only people we verify on our central DB to post to the blockchain gives us trust. 
 2. Immutability - This can be used to get people to trust review sites more, because no product owner will be able to influence or change a review after it’s posted
 3. Transparency - users, merchants and third parties will be able to see the entire activities on the system
