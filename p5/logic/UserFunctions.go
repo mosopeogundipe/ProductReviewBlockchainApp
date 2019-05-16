@@ -13,6 +13,7 @@ import (
 	"golang.org/x/crypto/sha3"
 	"log"
 	"os"
+	"strings"
 )
 
 //func AddUser() (string, string){
@@ -45,14 +46,18 @@ func CreateUser(users *data.Users) (string, string) {
 	publicKey, privateKey := createPublicPrivateKeyPair()
 	publicKeyStr := ExportRsaPublicKeyAsPemStr(publicKey)
 	privateKeyStr := ExportRsaPrivateKeyAsPemStr(privateKey)
+	publicKeyStr = strings.TrimSpace(publicKeyStr)
 	sum := sha3.Sum256([]byte(publicKeyStr))
+	hash := hex.EncodeToString(sum[:])
+	log.Println("Public Key: ", publicKeyStr)
 	if len(users.UserSet) == 0 {
 		users.UserSet = make(map[string]bool)
-		users.UserSet[hex.EncodeToString(sum[:])] = true
+		users.UserSet[hash] = true
 		//log.Println("storing in user set. len: ", len(users.UserSet))
 	} else {
-		users.UserSet[hex.EncodeToString(sum[:])] = true
+		users.UserSet[hash] = true
 	}
+	log.Println("User PK Hash: ", hash)
 	return publicKeyStr, privateKeyStr
 }
 
@@ -99,6 +104,7 @@ func SignWithPrivateKey(message []byte, privatekey []byte) []byte {
 	pssh := newhash.New()
 	pssh.Write(PKCS1message)
 	hashed := pssh.Sum(nil)
+	log.Println("Priv Key Sign, hash message: ", hashed)
 	block, _ := pem.Decode(privatekey)
 	if block == nil {
 		fmt.Fprintf(os.Stderr, "Error in private key %s\n")
@@ -126,17 +132,19 @@ func VerifyPrivateKeySignature(message []byte, signature []byte, publicKey []byt
 	pssh := newhash.New()
 	pssh.Write(PKCS1message)
 	hashed := pssh.Sum(nil)
+	log.Println("Pub Key Sign, hash message: ", hashed)
 	block, _ := pem.Decode(publicKey)
 	if block == nil {
 		fmt.Fprintf(os.Stderr, "Error in public key %s\n")
 		return false
 	}
-	pubInterface, err := x509.ParsePKIXPublicKey(block.Bytes)
+	//pubInterface, err := x509.ParsePKIXPublicKey(block.Bytes)
+	rsaPublicKey, err := x509.ParsePKCS1PublicKey(block.Bytes)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error parsing public key from bytes: %s\n", err)
 		return false
 	}
-	rsaPublicKey := pubInterface.(*rsa.PublicKey)
+	//rsaPublicKey := pubInterface.(*rsa.PublicKey)
 	var errs error = rsa.VerifyPKCS1v15(rsaPublicKey, newhash, hashed[:], signature)
 	if errs != nil {
 		fmt.Fprintf(os.Stderr, "Error from signature verification: %s\n", errs)

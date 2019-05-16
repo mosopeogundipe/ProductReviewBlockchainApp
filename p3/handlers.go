@@ -2,6 +2,7 @@ package p3
 
 import (
 	"bytes"
+	"cs686-blockchain-p3-mosopeogundipe/p1"
 	"cs686-blockchain-p3-mosopeogundipe/p2"
 	"cs686-blockchain-p3-mosopeogundipe/p3/data"
 	data2 "cs686-blockchain-p3-mosopeogundipe/p5/data"
@@ -18,6 +19,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -28,6 +30,8 @@ var MIDDLE_LAYER_SERVER = "http://localhost:7700" //IP and port of middle layer 
 var SELF_ADDR = "http://localhost:6688"
 var HEART_BEAT_API_SUFFIX = "/heartbeat/receive"
 var UPLOAD_BLOCK_SUFFIX = "/block"
+var INTERVAL = 5
+var MUTEX = &sync.Mutex{}
 
 var SBC data.SyncBlockChain
 var Peers data.PeerList
@@ -324,32 +328,58 @@ func StartHeartBeat() {
 }
 
 func StartTryingNonces() {
+	timeStamp := 0
 	for {
-		log.Println("Entered Start Trying Nonces...")
 		_, isGenesisBlockCreated := SBC.Get(0)
 		var block p2.Block
-		mpt := data.CreateRandomMpt()
 		if !isGenesisBlockCreated {
+			log.Println("Entered Create Genesis Block...")
+			mpt := data.CreateRandomMpt() //only create rendom mpt for genesis block
 			block = SBC.GenBlock(mpt)
 			peerMapJson, _ := Peers.PeerMapToJson()
 			heartbeat := data.PrepareHeartBeatData(&SBC, Peers.GetSelfId(), peerMapJson, SELF_ADDR, block, true)
 			ForwardHeartBeat(heartbeat)
 			continue
 		}
-		parentBlock := SBC.GetLatestBlocks()[0]
-		proposedParentHash = parentBlock.Header.Hash
-		nonce := data.GetNonce(parentBlock, mpt.GetRoot())
-		if data.IS_PARENT_USED_ALREADY { //checking if proposed parent is already used as a parent, just before I insert...
-			log.Println("Hash: ", parentBlock.Header.Hash, " is already used to create a block by another node")
-			data.IS_PARENT_USED_ALREADY = false //reset checker value to default
-			continue
+		//log.Println("timeStamp: ", timeStamp, "current time: ", time.Now().Second())
+		if time.Now().Second()-timeStamp > INTERVAL { //will now generate new block every 5 seconds
+			//for non-genesis blocks, make mpt from current transactions in pool
+			log.Println("Entered Create Other Blocks. Transaction Count: ", len(transactionQueue))
+			if len(transactionQueue) > 0 {
+				log.Println("Transactions exist...")
+				mpt := p1.MerklePatriciaTrie{}
+				mpt.Initial()
+				//MUTEX.Lock()
+				for i := 0; i < len(transactionQueue); i++ {
+					sum := sha3.Sum256([]byte(transactionQueue[0].PublicKey))
+					hash := hex.EncodeToString(sum[:])
+					transactionJson, _ := json.Marshal(transactionQueue[0])
+					mpt.Insert(hash, string(transactionJson))
+					// Dequeue current transaction from pool
+					transactionQueue[0] = data2.Transaction{}
+					transactionQueue = transactionQueue[1:]
+				}
+				//MUTEX.Unlock()
+				parentBlock := SBC.GetLatestBlocks()[0]
+				proposedParentHash = parentBlock.Header.Hash
+				nonce := data.GetNonce(parentBlock, mpt.GetRoot())
+				log.Println("got nonce!")
+				if data.IS_PARENT_USED_ALREADY { //checking if proposed parent is already used as a parent, just before I insert...
+					log.Println("Hash: ", parentBlock.Header.Hash, " is already used to create a block by another node")
+					data.IS_PARENT_USED_ALREADY = false //reset checker value to default
+					continue
+				}
+				block = p2.Initial(parentBlock.Header.Hash, parentBlock.Header.Height, mpt)
+				block.Header.Nonce = nonce
+				//data.SetValues(true, block)
+				peerMapJson, _ := Peers.PeerMapToJson()
+				heartbeat := data.PrepareHeartBeatData(&SBC, Peers.GetSelfId(), peerMapJson, SELF_ADDR, block, true)
+				ForwardHeartBeat(heartbeat)
+			} else {
+				log.Println("Could not create new block : No transactions in Queue!")
+			}
+			timeStamp = 0
 		}
-		block = p2.Initial(parentBlock.Header.Hash, parentBlock.Header.Height, mpt)
-		block.Header.Nonce = nonce
-		//data.SetValues(true, block)
-		peerMapJson, _ := Peers.PeerMapToJson()
-		heartbeat := data.PrepareHeartBeatData(&SBC, Peers.GetSelfId(), peerMapJson, SELF_ADDR, block, true)
-		ForwardHeartBeat(heartbeat)
 	}
 }
 
@@ -395,10 +425,13 @@ func TransactionReceive(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(500)
 		return
 	}
-	q := r.URL.Query()
-	signatureStr := q["Signature"][0]
+	q := r.URL.RawQuery
+	log.Println("raw query: ", q)
+	signatureStr := strings.TrimPrefix(q, "Signature=")
 	originallySignedMsg := data2.Transaction{TransactionID: "", PublicKey: "", ReviewObj: transaction.ReviewObj} //create object with exact same contents as when message was signed
 	originallySignedMsgJson, _ := json.Marshal(originallySignedMsg)
+	//log.Println("Signature: ", signatureStr)
+	log.Println("JSON message: ", string(originallySignedMsgJson))
 	signature, err := base64.StdEncoding.DecodeString(signatureStr) //convert signature string back to byte array
 	if err != nil {
 		log.Println(err, "Error in decoding signature to byte array: TransactionReceive ")
@@ -407,8 +440,26 @@ func TransactionReceive(w http.ResponseWriter, r *http.Request) {
 	}
 	isSignatureVerified := logic.VerifyPrivateKeySignature([]byte(string(originallySignedMsgJson)), signature, []byte(transaction.PublicKey))
 	if isSignatureVerified { //add to pool if signature is verified
-		transactionQueue = append(transactionQueue, transaction)
-		w.WriteHeader(200)
+		log.Println("Signature is Verified!")
+		log.Println("Transaction pool size: ", len(transactionQueue))
+		if len(transactionQueue) == 0 {
+			MUTEX.Lock()
+			transactionQueue = append(transactionQueue, transaction)
+			MUTEX.Unlock()
+			w.WriteHeader(200)
+		} else {
+			for tx := range transactionQueue {
+				if transactionQueue[tx] == transaction {
+					w.WriteHeader(200)
+					w.Write([]byte("Transaction is currently in miner's queue. Can't add same transaction multiple times"))
+					return
+				}
+			}
+			MUTEX.Lock()
+			transactionQueue = append(transactionQueue, transaction)
+			MUTEX.Unlock()
+			w.WriteHeader(200)
+		}
 	} else {
 		log.Println("Transaction Invalid. Public-Private key mismatch")
 		w.WriteHeader(400)
@@ -416,7 +467,125 @@ func TransactionReceive(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func FindReviewsByPublicKey(w http.ResponseWriter, r *http.Request) {
+	log.Println("Entered FindReviewsByPublicKey")
+	var userUpload data2.UserWebUpload
+	request, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.Println(err, "Error in reading post request: FindReviewsByPublicKey ")
+		w.WriteHeader(500)
+		return
+	}
+	err = json.Unmarshal([]byte(request), &userUpload)
+	if err != nil {
+		log.Println(err, "Error in json unmarshal: FindReviewsByPublicKey ")
+		w.WriteHeader(500)
+		return
+	}
+	if userUpload.PublicKey == "" {
+		log.Println(err, "No public key given")
+		w.WriteHeader(500)
+		w.Write([]byte(string("No public key given")))
+		return
+	}
+	publicKey := strings.TrimSpace(userUpload.PublicKey)
+	log.Println("Pub Key: ", publicKey)
+	sum := sha3.Sum256([]byte(publicKey))
+	hashedKey := hex.EncodeToString(sum[:])
+	//var transactions []data2.Transaction
+	transactions := ""
+	for key := range SBC.GetBlockChain().Chain {
+		value := SBC.GetBlockChain().Chain[key]
+		for index := range value {
+			blockInChain := value[index]
+			transactionJson, _ := blockInChain.Value.Get(hashedKey)
+			if transactionJson != "" && transactionJson != "failure" { //transaction exists in this mpt for Public Key
+				//var transaction data2.Transaction
+				//err := json.Unmarshal([]byte(transactionJson), &transaction)
+				//if err != nil {
+				//	log.Println(err, "Error in converting JSON to transaction object ")
+				//	w.WriteHeader(500)
+				//	return
+				//}
+				//transactions = append(transactions, transaction)
+				transactions += transactionJson + "\n\n"
+			}
+		}
+	}
+	if transactions == "" {
+		w.WriteHeader(200)
+		w.Write([]byte(string("No record exist with Public Key in Blockchain")))
+	} else {
+		//transactionsJson, _ := json.Marshal(transactions)
+		w.WriteHeader(200)
+		w.Write([]byte(string(transactions)))
+	}
+}
+
 //if transaction queue isn't empty, take next transaction in front of the queue
 func removeTransactionFromPool() data2.Transaction {
 	return data2.Transaction{}
+}
+
+func FindReviewsByProductAndUserID(w http.ResponseWriter, r *http.Request) {
+	log.Println("Entered FindReviewsByProductID")
+	var userUpload data2.UserWebUpload
+	request, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.Println(err, "Error in reading post request: FindReviewsByProductID ")
+		w.WriteHeader(500)
+		return
+	}
+	err = json.Unmarshal([]byte(request), &userUpload)
+	if err != nil {
+		log.Println(err, "Error in json unmarshal: FindReviewsByProductID ")
+		w.WriteHeader(500)
+		return
+	}
+	if userUpload.PublicKey == "" {
+		log.Println(err, "No public key given")
+		w.WriteHeader(500)
+		w.Write([]byte(string("No public key given")))
+		return
+	}
+	if userUpload.ProductID == "" {
+		log.Println(err, "No product id given")
+		w.WriteHeader(500)
+		w.Write([]byte(string("No product id given")))
+		return
+	}
+	publicKey := strings.TrimSpace(userUpload.PublicKey)
+	log.Println("Pub Key: ", publicKey)
+	sum := sha3.Sum256([]byte(publicKey))
+	hashedKey := hex.EncodeToString(sum[:])
+	//var transactions []data2.Transaction
+	transactions := ""
+	for key := range SBC.GetBlockChain().Chain {
+		value := SBC.GetBlockChain().Chain[key]
+		for index := range value {
+			blockInChain := value[index]
+			transactionJson, _ := blockInChain.Value.Get(hashedKey)
+			if transactionJson != "" && transactionJson != "failure" { //transaction exists in this mpt for Public Key
+				var transaction data2.Transaction
+				err := json.Unmarshal([]byte(transactionJson), &transaction)
+				if err != nil {
+					log.Println(err, "Error in converting JSON to transaction object ")
+					w.WriteHeader(500)
+					return
+				}
+				//transactions = append(transactions, transaction)
+				if transaction.ReviewObj.Product.ProductID == userUpload.ProductID {
+					transactions += transactionJson + "\n\n"
+				}
+			}
+		}
+	}
+	if transactions == "" {
+		w.WriteHeader(200)
+		w.Write([]byte(string("No record exist for Public Key/ProductID pair in Blockchain")))
+	} else {
+		//transactionsJson, _ := json.Marshal(transactions)
+		w.WriteHeader(200)
+		w.Write([]byte(string(transactions)))
+	}
 }

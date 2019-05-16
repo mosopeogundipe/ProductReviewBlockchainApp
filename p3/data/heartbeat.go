@@ -13,7 +13,7 @@ import (
 var LETTER_RUNES = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 var HEX_CHARSET = []rune("abcdefABCDEF0123456789")
 var IS_PARENT_USED_ALREADY = false
-var NONCE_PREFIX = "000000"
+var NONCE_PREFIX = "00000"
 
 type HeartBeatData struct {
 	IfNewBlock  bool   `json:"ifNewBlock"`
@@ -102,6 +102,7 @@ func CreateRandomMpt() p1.MerklePatriciaTrie {
 }
 
 func GetNonce(parentBlock p2.Block, mptRoot string) string {
+	log.Println("Entered GetNonce")
 	var isNonceGenerated bool = false
 	var nonce string = ""
 	parentHash := parentBlock.Header.Hash

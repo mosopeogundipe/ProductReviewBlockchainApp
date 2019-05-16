@@ -54,4 +54,16 @@ var routes = Routes{
 		"/transaction/receive",
 		TransactionReceive,
 	},
+	Route{
+		"FindReviewsByPublicKey",
+		"POST",
+		"/reviews/find/publickey",
+		FindReviewsByPublicKey,
+	},
+	Route{
+		"FindReviewsByProductAndUserID",
+		"POST",
+		"/reviews/find/all",
+		FindReviewsByProductAndUserID,
+	},
 }

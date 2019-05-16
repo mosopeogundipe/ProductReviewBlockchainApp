@@ -120,3 +120,7 @@ func (sbc *SyncBlockChain) GetParentBlock(block p2.Block) p2.Block {
 func (sbc *SyncBlockChain) Show() string {
 	return sbc.bc.Show()
 }
+
+func (sbc *SyncBlockChain) GetBlockChain() p2.BlockChain {
+	return sbc.bc
+}

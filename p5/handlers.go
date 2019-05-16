@@ -12,6 +12,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 //Port 7700 is used for this server
@@ -74,6 +75,7 @@ func RegisterProduct(w http.ResponseWriter, r *http.Request) {
 
 // API #1 in miner flow
 // Miners call this API to register themselves in this central data layer
+//This is called when start function of miners are called
 func RegisterMiner(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	host := q["host"][0]
@@ -129,15 +131,20 @@ func PostReview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	product, productfound := PRODUCTS.ProductSet[USERUPLOAD.ProductID]
+	USERUPLOAD.PublicKey = strings.TrimSpace(USERUPLOAD.PublicKey)
+	log.Println("Pub Key: ", USERUPLOAD.PublicKey)
 	sum := sha3.Sum256([]byte(USERUPLOAD.PublicKey))
-	_, userfound := USERS.UserSet[hex.EncodeToString(sum[:])]
+	hash := hex.EncodeToString(sum[:])
+	userfound := USERS.UserSet[hash]
+	log.Println("User Set Count: ", len(USERS.UserSet))
+	log.Println("User PK Hash: ", hash)
 	if productfound == false {
 		log.Println("Product with ID" + USERUPLOAD.ProductID + "does not exist in database ")
 		w.WriteHeader(404)
 		return
 	}
 	if userfound == false {
-		log.Println("Product does not exist in database ")
+		log.Println("User does not exist in database ")
 		w.WriteHeader(404)
 		return
 	}
@@ -153,6 +160,7 @@ func PostReview(w http.ResponseWriter, r *http.Request) {
 }
 
 func ForwardTransactionToMiners(transactionJson string, signature string) {
+	log.Println("forwarding transaction to miners. Miner count: ", len(MINERS))
 	for addr, _ := range MINERS {
 		url := addr + MINERS_TRANSACTION_API + "?Signature=" + signature
 		httpPost(url, transactionJson)
@@ -181,6 +189,7 @@ func SignMessage(w http.ResponseWriter, r *http.Request) {
 	review := data.Review{Product: product, Review: signMessage.Review}
 	transaction := data.Transaction{TransactionID: "", PublicKey: "", ReviewObj: review}
 	transactionJson, _ := json.Marshal(transaction)
+	log.Println("JSON Initial message: ", string(transactionJson))
 	log.Println("PRI KEY: ", signMessage.PrivateKey)
 	signature := logic.SignWithPrivateKey([]byte(transactionJson), []byte(signMessage.PrivateKey))
 	w.WriteHeader(200)
