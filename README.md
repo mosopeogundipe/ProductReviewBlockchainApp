@@ -1,5 +1,7 @@
 # cs686_BlockChain_P5: Blockchain Product Review System
 
+###Link to the youtube video description: https://youtu.be/xT9bUAuePCw
+
 ### Why Blockchain
 
 People find it hard to trust reviews from most review websites. Using blockchain would allow us achieve trust through immutability and transparency that blockchain provides. Blockchain is also good because it allows reviewers to remain anonymous, while ensuring they are verified. This is useful for reviews of sensitive products. This solution will only work only for products that have a unique product id (number usually found on a barcode). This ID might be same for products in the same batch, and that’s still okay for this solution
