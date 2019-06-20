@@ -155,16 +155,20 @@ func PostReview(w http.ResponseWriter, r *http.Request) {
 	transactionHashNoID := hex.EncodeToString(sum[:])
 	transaction.TransactionID = transactionHashNoID
 	transactionJson, _ = json.Marshal(transaction) //send this json to all miners using POST API
-	ForwardTransactionToMiners(string(transactionJson), USERUPLOAD.Signature)
-
+	statusCode, responseBody := ForwardTransactionToMiners(string(transactionJson), USERUPLOAD.Signature)
+	w.WriteHeader(statusCode)
+	w.Write([]byte(responseBody))
 }
 
-func ForwardTransactionToMiners(transactionJson string, signature string) {
+func ForwardTransactionToMiners(transactionJson string, signature string) (int, string) {
 	log.Println("forwarding transaction to miners. Miner count: ", len(MINERS))
+	statusCode := 0
+	responseBody := ""
 	for addr, _ := range MINERS {
 		url := addr + MINERS_TRANSACTION_API + "?Signature=" + signature
-		httpPost(url, transactionJson)
+		statusCode, responseBody = httpPost(url, transactionJson)
 	}
+	return statusCode, responseBody
 }
 
 //API called by to get signature of a message for a user
@@ -197,7 +201,7 @@ func SignMessage(w http.ResponseWriter, r *http.Request) {
 	w.Write(signature)
 }
 
-func httpPost(url string, jsonBody string) {
+func httpPost(url string, jsonBody string) (int, string) {
 	log.Println("Entered POST")
 	var jsonStr = []byte(jsonBody)
 	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonStr))
@@ -208,10 +212,12 @@ func httpPost(url string, jsonBody string) {
 		panic(err)
 	}
 	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
 	if resp.StatusCode != 200 {
 		fmt.Println("Error in POST. Status is:", resp.Status)
 	}
 	log.Println("response Status:", resp.Status)
 	log.Println("response Headers:", resp.Header)
 	log.Println("Finished POST")
+	return resp.StatusCode, string(body)
 }

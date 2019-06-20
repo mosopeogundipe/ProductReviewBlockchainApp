@@ -439,9 +439,34 @@ func TransactionReceive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	isSignatureVerified := logic.VerifyPrivateKeySignature([]byte(string(originallySignedMsgJson)), signature, []byte(transaction.PublicKey))
-	if isSignatureVerified { //add to pool if signature is verified
+	if isSignatureVerified { //check if user hasn't submitted review for product already, and add to pool if that's true
 		log.Println("Signature is Verified!")
 		log.Println("Transaction pool size: ", len(transactionQueue))
+		publicKey := strings.TrimSpace(transaction.PublicKey)
+		sum := sha3.Sum256([]byte(publicKey))
+		hashedKey := hex.EncodeToString(sum[:])
+		for key := range SBC.GetBlockChain().Chain {
+			value := SBC.GetBlockChain().Chain[key]
+			for index := range value {
+				blockInChain := value[index]
+				transactionJson, _ := blockInChain.Value.Get(hashedKey)
+				if transactionJson != "" && transactionJson != "failure" { //transaction exists in this mpt for Public Key
+					var transaction2 data2.Transaction
+					err := json.Unmarshal([]byte(transactionJson), &transaction2)
+					if err != nil {
+						log.Println(err, "Error in converting JSON to transaction object ")
+						w.WriteHeader(500)
+						return
+					}
+					if transaction2.ReviewObj.Product.ProductID == transaction.ReviewObj.Product.ProductID {
+						log.Println(err, "User Has Previously Uploaded a Review For Same Product. Only one review allowed per product")
+						w.WriteHeader(500)
+						w.Write([]byte("User Has Previously Uploaded a Review For Same Product. Only one review allowed per product"))
+						return
+					}
+				}
+			}
+		}
 		if len(transactionQueue) == 0 {
 			MUTEX.Lock()
 			transactionQueue = append(transactionQueue, transaction)
@@ -459,11 +484,12 @@ func TransactionReceive(w http.ResponseWriter, r *http.Request) {
 			transactionQueue = append(transactionQueue, transaction)
 			MUTEX.Unlock()
 			w.WriteHeader(200)
+			w.Write([]byte("Transaction posted successfully"))
 		}
 	} else {
-		log.Println("Transaction Invalid. Public-Private key mismatch")
+		log.Println("Transaction Invalid. PublicKey, Signature, Review message and ProductID must be same as the ones in signed message")
 		w.WriteHeader(400)
-		w.Write([]byte("Transaction Invalid. Public-Private key mismatch"))
+		w.Write([]byte("Transaction Invalid. PublicKey, Signature, Review message and ProductID must be same as the ones in signed message"))
 	}
 }
 
