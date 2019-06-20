@@ -16,31 +16,6 @@ import (
 	"strings"
 )
 
-//func AddUser() (string, string){
-//	id := createUserID()
-//	publicKey, privateKey := createPublicPrivateKeyPair()
-//	if len(data.USERS) == 0{
-//		data.USERS = make(map[int32]data.User)
-//		data.USERS[id] = data.User{PublicKey:publicKey, ID:id}
-//	}else{
-//		data.USERS[id] = data.User{PublicKey:publicKey, ID:id}
-//	}
-//
-//}
-//
-////integers that increment by 1
-//func createUserID() int32{
-//	if len(data.USERS) == 0{
-//		return 1
-//	}else{
-//		var lastID int32;
-//		for key,_ := range data.USERS{
-//			lastID = key
-//		}
-//		return lastID + 1
-//	}
-//}
-
 //Stores hash of user's public key in set
 func CreateUser(users *data.Users) (string, string) {
 	publicKey, privateKey := createPublicPrivateKeyPair()
