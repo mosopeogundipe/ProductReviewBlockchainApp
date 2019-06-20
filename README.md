@@ -1,6 +1,6 @@
 # cs686_BlockChain_P5: Blockchain Product Review System
 
-### Link to the youtube video description: https://youtu.be/xT9bUAuePCw
+### Link to the youtube video demo: https://youtu.be/xT9bUAuePCw
 
 ### Why Blockchain
 
